@@ -45,9 +45,9 @@ byte cmdtype=TYPE_NONE;   //SND,...
 byte cmdpos=POS_NONE;       //Que esta leyendo: From  To   msg
 byte cmdpositiondata;    //En que parte de lo que esta leyendo esta
 
-char strfrom[10];
-char strto[10];
-char tempstr[2];   //Buffer donde se almacena cualquier tipo de información temporal :Tipo de comando , from, to...
+char strfrom[15];                                                                                                         //Todos tienen una longitud máxima de 10!
+char strto[15];
+char tempstr[15];   //Buffer donde se almacena cualquier tipo de información temporal :Tipo de comando , color...
 
 byte msgtype=TYPE_MSG_NONE;  //Sobre el mensaje dentro del comando SND
 byte msgpositiondata;
@@ -97,13 +97,13 @@ void loop()
                 if (bytereceived=='~') //Si se receibe el carácter de finalizar comando se acaba el comando
                 {
                    if (cmdpos==POS_SND_RESEND) Serial.println("~");  //Si actualmente se estaba reenviando el comando, lo finaliza con un ~
-                   Serial.println("Commando finalizado con exito");
+                   Serial.println(F("Commando finalizado con exito"));
                   goto endcommand;
                 }
 
                 if (bytereceived=='|') //Si se receibe el carácter de empezar comando se cancela el actual y se empieza otro
                 {
-                  Serial.println("!!! Comando finalizado por la presencia de caracter de inicio de otro. Cancelando actual y pasando al otro");
+                  Serial.println(F("!!! Comando finalizado por la presencia de caracter de inicio de otro. Cancelando actual y pasando al otro"));
                   goto iniciodecomando;
                 }
                 
@@ -127,7 +127,7 @@ void loop()
                             {
                               if (bytereceived=='-')  // Se intenta adivinar que comando es
                               {
-                                  Serial.print("CMD type read successfully: ");
+                                  Serial.print(F("CMD type read successfully: "));
                                   Serial.print(tempstr[0]);
                                   Serial.print(tempstr[1]);
                                   //tempcmd[2]=tempstr[2]-1;
@@ -135,18 +135,18 @@ void loop()
 
                                   if (choosecmdtype()==true) //Se asigna el tipo de comando Devuelve true si encuentra el comando correcto Usa variables globales
                                   {
-                                    Serial.print("Found command for command type: ");
+                                    Serial.print(F("Found command for command type: "));
                                     Serial.println(cmdtype);
                                   }else
                                   {
-                                    Serial.println("!!!Command not found. Exiting command");
+                                    Serial.println(F("!!!Command not found. Exiting command"));
                                     commandmustend=true;
                                   }
                                   
                                   //commandmustend=true;
                               }else  //Si al final del tipo de comando no está el signo correspondiente,da error y sale del comando
                               {
-                                  Serial.print("Error: Sign - after cmd type not present: ");
+                                  Serial.print(F("Error: Sign - after cmd type not present: "));
                                   Serial.println((char)bytereceived);
                                   commandmustend=true;
                               }
@@ -164,7 +164,7 @@ void loop()
                           command_SND();
                        }else
                        {
-                          Serial.println("A strange command has been assigned but not enough code is present. Ending command...");
+                          Serial.println(F("A strange command has been assigned but not enough code is present. Ending command..."));
                           commandmustend=true;
                        }
                       
@@ -186,7 +186,7 @@ void loop()
             {
                 if (requesttime>=1000)  //Si ha pasado un segundo sin recibir cadena
                 {
-                     Serial.println("!!! Commando finalizado automaticamente por exceso de tiempo de espera");
+                     Serial.println(F("!!! Commando finalizado automaticamente por exceso de tiempo de espera"));
                      goto endcommand;
                 }else  //Si aun no ha pasado 1 seg se sumo 1 ms
                 {
@@ -234,108 +234,6 @@ bool choosecmdtype()     //Se asigna el tipo de comando. Devuelve true si encuen
 }
 
 
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// Funciones de comandos
-
-void command_SND()
-{
-  //Serial.println("Comannd SND invocado!!!");
-
-  if (cmdpos==POS_SND_NONE) 
-  {
-      cmdpos=POS_SND_FROM;  // Si es la primera vez que se ejecuta el comando SND, se pone en la primera parte de lectura
-      cmdpositiondata=0;
-
-      msgtype=TYPE_MSG_NONE; //Se reinicia el mensaje
-      msgpositiondata=0;   //Se reinicia el mensaje
-
-      //memset( strfrom, '~' , sizeof(strfrom) ) ;
-      //memset( strto, '~' , sizeof(strto) ) ;
-  }
-
-  if (cmdpos==POS_SND_FROM)  //Si se está analizando el remitente
-  {
-      if (bytereceived=='-')    //Ya se ha alcanzado el final del argumento
-      {
-        Serial.print("\"FROM\" argument parsed successfully: ");
-        Serial.println(strfrom);
-
-        cmdpositiondata=0;
-        cmdpos=POS_SND_TO;
-
-      }else
-      {
-        if (cmdpositiondata>=10) 
-        {
-          Serial.println("Exceded maximum number of charaters for FROM arg.");
-          commandmustend=true;
-        }
-        strfrom[cmdpositiondata]=bytereceived;
-        cmdpositiondata++;
-      }
-      
-  }else if(cmdpos==POS_SND_TO)  //Si se está analizando el destinatario
-  {
-      if (bytereceived==':') //Ya se ha alcanzado el final del argumento
-      {
-        Serial.print("\"TO\" argument parsed successfully: ");
-        Serial.println(strto);
-        
-        if (areequal(AB_ADDRESS,strto)==true)
-        {
-          Serial.println("Received data address match with the local one. Executing message...");
-          cmdpos=POS_SND_EXECUTE;
-          cmdpositiondata=0;
-          msgtype=TYPE_MSG_NONE;
-        
-        }else
-        {
-          Serial.println("Received data address does not match with the local one. Resending it...");
-          cmdpos=POS_SND_RESEND;
-          Serial.write("|SND-");
-          Serial.write(strfrom);
-          Serial.write("-");
-          Serial.write(strto);
-          Serial.write(":");
-        }
-
-      }else
-      {
-        if (cmdpositiondata>=10) 
-        {
-          Serial.println("Exceded maximum number of charaters for TO arg.");
-          commandmustend=true;
-        }
-        strto[cmdpositiondata]=bytereceived;
-        cmdpositiondata++;
-      }
-  }else if(cmdpos==POS_SND_RESEND)
-  {
-      Serial.write(bytereceived);      
-  }else if(cmdpos==POS_SND_EXECUTE)
-  {
-      if (msgtype==TYPE_MSG_NONE)
-      {
-          if (bytereceived=='-')
-          {
-            Serial.print("Message type parsing procedure complete: ");
-            Serial.println(tempstr);
-          }else
-          {
-            if(cmdpositiondata>=3)
-            {
-              Serial.println("Exceded maximum number of charaters when parsing command type.");
-              commandmustend=true;
-            }else
-            {
-              if (cmdpositiondata==0) memset(tempstr,0,sizeof(tempstr));
-              tempstr[cmdpositiondata]=bytereceived;
-              cmdpositiondata++;
-            }
-          }
-      }
-  }
-}
 
 
 

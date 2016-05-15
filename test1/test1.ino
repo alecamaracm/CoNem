@@ -3,6 +3,7 @@
 #define PIN_DATA 6
 #define LED_LENGHT 60
 
+
 ////////////////COMMAND TYPES/////////////////////////////////////
 #define TYPE_NONE 0
 #define TYPE_SND 1   //Tipos de comando
@@ -21,9 +22,11 @@
 /////////////SND MESSAGES VARS/////////////////////////////////
 #define TYPE_MSG_NONE 0
 #define TYPE_MSG_STA 1
+#define TYPE_MSG_STR 2
 ///////////////////////////////////////////////////////////////
 
-
+#define DEBUG_MSG 0   //Si se mostrarán los mesajes de debug
+#define BAUDRATE_RX 250000
 
 /////////////MODULE IDENTIFICATION/////////////////////////
 #define AB_ADDRESS "LEDTEST01"                  // 10 cifras máximo
@@ -36,9 +39,10 @@
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(60, PIN_DATA, NEO_GRB + NEO_KHZ800);
 //SoftwareSerial serial2;
 
+long starttime;    //Time when the command starts
 
 byte bytereceived;   //Ultimo byte recibido
-int requesttime=0;   //Tiempo que lleva para que se agote el itempo de espera
+unsigned int requesttime=0;   //Tiempo que lleva para que se agote el itempo de espera
 bool commandmustend;    //Una función lo puede poner en true para forzar el acabado de comando
 
 byte cmdtype=TYPE_NONE;   //SND,...
@@ -48,26 +52,31 @@ byte cmdpositiondata;    //En que parte de lo que esta leyendo esta
 char strfrom[15];                                                                                                         //Todos tienen una longitud máxima de 10!
 char strto[15];
 char tempstr[15];   //Buffer donde se almacena cualquier tipo de información temporal :Tipo de comando , color...
+char tempstr2[15];
+byte tempcolor[3]; //Contiene un color: 255,0,127 Lo puede usar quien quiera  + byte null
 
 byte msgtype=TYPE_MSG_NONE;  //Sobre el mensaje dentro del comando SND
-byte msgpositiondata;
+byte msgpositiondata;  //Después de identificar el nombre cualquier funcion(STA) lo puede manipular como quiera
+unsigned int count1=0; //Counter que pueden usar las funciones
 
   
 void setup() {
   memset( tempstr, 0 , sizeof(tempstr) ) ;
   
   strip.begin();
-  Serial.begin(9600);
+  Serial.begin(BAUDRATE_RX);
   strip.show(); // Initialize all pixels to 'off'
 
-  Serial.print("Initialized module: ");
+  Serial.print(F("Initialized module: "));
   Serial.print(AB_ADDRESS);
   Serial.print("     Type: ");
   Serial.println(AB_TYPE);
-  Serial.print("Available SRAM memory: ");
+  Serial.print(F("Available SRAM memory: "));
   Serial.println(availableMemory());
 
-  Serial.println(tempstr[10]);        //El último carácter es inútil, Dios sabe por qué
+  if (DEBUG_MSG==1) Serial.println(F("WARNING: Debug mode is ON. Long commands will not work properly!"));
+  if (BAUDRATE_RX>9600) Serial.println(F("WARNING: RX Baud rate is set to a value greater than 9600."));                         
+
 }
 
 
@@ -78,10 +87,9 @@ void loop()
         bytereceived=Serial.read();
         if (bytereceived=='|')  //Si el primer caracter es un comienzo de comando (|)       
         {
-            iniciodecomando:;
-            Serial.println("---Inicio de commando");
-
-                         
+            iniciodecomando:;            
+            
+            if (DEBUG_MSG==1) Serial.println("---Inicio de commando");                         
 
             resetcommand(); //Se resetean todas las variables orientadas al comando
 
@@ -97,7 +105,7 @@ void loop()
                 if (bytereceived=='~') //Si se receibe el carácter de finalizar comando se acaba el comando
                 {
                    if (cmdpos==POS_SND_RESEND) Serial.println("~");  //Si actualmente se estaba reenviando el comando, lo finaliza con un ~
-                   Serial.println(F("Commando finalizado con exito"));
+                   if (DEBUG_MSG==1) Serial.println(F("Commando finalizado con exito"));
                   goto endcommand;
                 }
 
@@ -127,16 +135,16 @@ void loop()
                             {
                               if (bytereceived=='-')  // Se intenta adivinar que comando es
                               {
-                                  Serial.print(F("CMD type read successfully: "));
-                                  Serial.print(tempstr[0]);
-                                  Serial.print(tempstr[1]);
+                                  if (DEBUG_MSG==1) Serial.print(F("CMD type read successfully: "));
+                                  if (DEBUG_MSG==1) Serial.print(tempstr[0]);
+                                  if (DEBUG_MSG==1) Serial.print(tempstr[1]);
                                   //tempcmd[2]=tempstr[2]-1;
-                                  Serial.println((char)(tempstr[2]));
+                                  if (DEBUG_MSG==1) Serial.println((char)(tempstr[2]));
 
                                   if (choosecmdtype()==true) //Se asigna el tipo de comando Devuelve true si encuentra el comando correcto Usa variables globales
                                   {
-                                    Serial.print(F("Found command for command type: "));
-                                    Serial.println(cmdtype);
+                                    if (DEBUG_MSG==1) Serial.print(F("Found command for command type: "));
+                                    if (DEBUG_MSG==1) Serial.println(cmdtype);
                                   }else
                                   {
                                     Serial.println(F("!!!Command not found. Exiting command"));
@@ -175,7 +183,7 @@ void loop()
                 
                 if (commandmustend==true)
                 {
-                  Serial.println("!!! Commando finalizado por funcion");
+                  if (DEBUG_MSG==1) Serial.println("!!! Commando finalizado por funcion");
                   goto endcommand;
                 }
 
@@ -199,60 +207,17 @@ void loop()
             }
 
             endcommand:;
-            Serial.println("---Final de commando");
+            if (DEBUG_MSG==1) Serial.println("---Final de commando");
           
         }
       }
-
-      
+     
       
 }
  
 
 
-void resetcommand()
-{
-  cmdtype=TYPE_NONE;   //Se pone en desconocido el tipo de comando
-  cmdpos=POS_NONE;
-  commandmustend=false;
-  cmdpositiondata=0;
-  memset(strfrom, 0, sizeof(strfrom));
-  memset(strto, 0, sizeof(strto));
-  memset(tempstr,0,sizeof(tempstr));
-}
 
-bool choosecmdtype()     //Se asigna el tipo de comando. Devuelve true si encuentra el comando correcto. Usa variables globales
-{
-  if (tempstr[0]=='S' && tempstr[1]=='N' && tempstr[2]=='D') //Comando SND
-  {
-    cmdtype=TYPE_SND;
-    cmdpos=POS_SND_NONE;
-    return true;
-  }
-
-  return false;
-}
-
-
-
-
-
-int availableMemory() {
-  int size = 2048; // Use 2048 with ATmega328
-  byte *buf;
-
-  while ((buf = (byte *) malloc(--size)) == NULL)
-    ;
-
-  free(buf);
-
-  return size;
-}
-
-bool areequal(char* str1,char* str2)
-{
-  return strcmp(str1,str2)==0;
-}
 
 
 

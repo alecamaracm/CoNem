@@ -20,8 +20,8 @@ void command_SND()
   {
       if (bytereceived=='-')    //Ya se ha alcanzado el final del argumento
       {
-        Serial.print(F("\"FROM\" argument parsed successfully: "));
-        Serial.println(strfrom);
+        if (DEBUG_MSG==1) Serial.print(F("\"FROM\" argument parsed successfully: "));
+        if (DEBUG_MSG==1) Serial.println(strfrom);
 
         cmdpositiondata=0;
         cmdpos=POS_SND_TO;
@@ -41,19 +41,19 @@ void command_SND()
   {
       if (bytereceived==':') //Ya se ha alcanzado el final del argumento
       {
-        Serial.print(F("\"TO\" argument parsed successfully: "));
-        Serial.println(strto);
+        if (DEBUG_MSG==1) Serial.print(F("\"TO\" argument parsed successfully: "));
+        if (DEBUG_MSG==1) Serial.println(strto);
         
         if (areequal(AB_ADDRESS,strto)==true)
         {
-          Serial.println(F("Received data address match with the local one. Executing message..."));
+          if (DEBUG_MSG==1) Serial.println(F("Received data address match with the local one. Executing message..."));
           cmdpos=POS_SND_EXECUTE;
           cmdpositiondata=0;
           msgtype=TYPE_MSG_NONE;
         
         }else
         {
-          Serial.println(F("Received data address does not match with the local one. Resending it..."));
+          if (DEBUG_MSG==1) Serial.println(F("Received data address does not match with the local one. Resending it..."));
           cmdpos=POS_SND_RESEND;
           Serial.write("|SND-");
           Serial.write(strfrom);
@@ -66,7 +66,7 @@ void command_SND()
       {
         if (cmdpositiondata>=10) 
         {
-          Serial.println(F("Exceded maximum number of charaters for TO arg."));
+          if (DEBUG_MSG==1) Serial.println(F("Exceded maximum number of charaters for TO arg."));
           commandmustend=true;
         }
         strto[cmdpositiondata]=bytereceived;
@@ -83,8 +83,14 @@ void command_SND()
           {
             
             if (areequal("STA",tempstr)==true){
-              Serial.println(F("Message type STA identified successfully."));
+              if (DEBUG_MSG==1) Serial.println(F("Message type STA identified successfully."));
                msgtype=TYPE_MSG_STA;              
+               msgpositiondata=0;
+               count1=0;
+            }else if(areequal("STR",tempstr)==true){
+               msgtype=TYPE_MSG_STR;
+               msgpositiondata=0;
+               count1=0;
             }else
             {
               Serial.print(F("Failed to detect the msg type: Not found"));
@@ -107,8 +113,14 @@ void command_SND()
           }
       }else if(msgtype==TYPE_MSG_STA)
       {
-          Serial.print("holiholi: ");
-          Serial.println((char)bytereceived);
+          //Serial.println((char)bytereceived);
+                //Serial.println(micros()-starttime);
+          message_STA();
+         
+      }else if(msgtype==TYPE_MSG_STR)
+      {
+          message_STR();
+          
       }
   }
 }
